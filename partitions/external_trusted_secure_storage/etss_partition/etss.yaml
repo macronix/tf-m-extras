@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Copyright (c) 2020-2022 Macronix. All rights reserved.
+# Copyright (c) 2020-2023 Macronix. All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -78,10 +78,7 @@
   ],
 
   "dependencies": [
-    "TFM_ITS_SET",
-    "TFM_ITS_GET",
-    "TFM_ITS_GET_INFO",
-    "TFM_ITS_REMOVE",
+    "TFM_INTERNAL_TRUSTED_STORAGE_SERVICE",
     "TFM_CRYPTO"
   ]
 }

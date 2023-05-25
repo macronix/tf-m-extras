@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022 Macronix International Co. LTD. All rights reserved.
+ * Copyright (c) 2020-2023 Macronix International Co. LTD. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
@@ -9,7 +9,7 @@
 
 #include <stddef.h>
 #include "psa/client.h"
-#include "etss/etss_api.h"
+#include "etss_api.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022 Macronix International Co. LTD. All rights reserved.
+ * Copyright (c) 2020-2023 Macronix International Co. LTD. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
@@ -9,20 +9,20 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "../secureflash/secureflash_common/secureflash_common.h"
-#include "secureflash_layout.h"
-
+#include "include/secureflash_error.h"
+#include "JEDEC_security_HAL/vendor_impl/vendor_secureflash_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#define APP_INFO_MAX_NUM        (0x10)
 /**
  * \file secureflash.h
  *
  * \brief This file describes secure Flash API layer
- * \details Secure Flash API layer grants access to valid client ids based on
- *          pre-provisioned application information.
+ * \details Secure Flash API layer grants access to valid clients
+ *          based on pre-provisioned application information.
  */
 /** \defgroup secureflash_api secure Flash API layer
  * @{
@@ -30,15 +30,15 @@ extern "C" {
 /*!
  * \struct app_data_t
  *
- * \brief Structure to store application id, key id and counter id binding
- *        information.
+ * \brief Structure to store the pre-provisioned application & secure zone
+ *        binding information.
  */
 typedef struct{
-    int32_t  app_id;    /*!< The id of applications */
+    int32_t app_id;     /*!< The id of applications */
     uint32_t key_id;    /*!< The id of crypto root keys */
     uint32_t zone_id:8, /*!< The id of security zone id */
              mc_id:8,   /*!< The id of monotonic counter */
-             reserved: 16;
+             reserved:16;
 }app_data_t;
 
 /*!
@@ -47,95 +47,85 @@ typedef struct{
  * \brief Structure to store the pre-provisioned application information.
  */
 typedef struct{
-    uint8_t id;
-    uint8_t num;
-    app_data_t app_data[APP_INFO_MAX_NUM];
+    uint8_t id;                            /*!< The id of app info */
+    uint8_t num;                           /*!< The number of app_data items */
+    app_data_t app_data[APP_INFO_MAX_NUM]; /*!< The detailed app_data */
 }app_info_t;
 
+
+typedef struct session_info_t session_info_t;
+
+/*!
+ * \struct session_info_t
+ *
+ * \brief Structure to store secure Flash session information.
+ */
+ struct session_info_t{
+     uint32_t key_id;         /*!< Root key id */
+     uint32_t session_key_id; /*!< Session key id */
+     uint32_t session_id;     /*!< Session id */
+};
 /*!
  * \struct secureflash_t
  *
- * \brief
+ * \brief Structure indicating secure Flash API layer informations
  */
 typedef struct{
-    uint32_t _init_ref_count; /*!< The initialization count of secure Flash */
-    bool _is_initialized;
-    app_info_t *app_info;     /*!< The pre-provisioned application information
-                                   of secure Flash */
-    vendor_op_register_t *vendor_op_register; /*!< The pointer to vendor
-                                                   specific implementation
-                                                   structure */
-    sf_ctx_t *sf_ctx;         /*!< The context of secure Flash */
+    //char *name; /*!< Secure Flash name */
+    uint32_t _init_ref_count;       /*!< The initialization count of secure Flash */
+    bool _is_initialized;           /*!< Secure Flash initialization status */
+    app_info_t app_info;            /*!< The pre-provisioned application information of secure Flash */
+    secure_flash_info_t flash_info; /*!< The specific secure Flash information */
+    //struct sfdp_hdr_info *sfdp_info; /*!< Reserved for SFDP information */
 }secureflash_t;
 
 /**
- * \brief Initialize a secure Flash.
+ * \brief Initialize secure Flash.
  *
- * \param[in] secureflash     Secure Flash to initialize
+ * \param[in] secureflash  Secure Flash to initialize
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
 int32_t secureflash_init(secureflash_t *secureflash);
 
 /**
- * \brief Deinitialize a secure Flash.
+ * \brief Uninitialize secure Flash.
  *
- * \param[in] secureflash     Secure Flash to initialize
+ * \param[in] secureflash  Secure Flash to deinitialize
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
-int32_t secureflash_deinit(secureflash_t *secureflash);
+int32_t secureflash_uninit(secureflash_t *secureflash);
 /* Provisioning Functionality */
-
+#ifdef SECUREFLASH_PROVISION
 /**
- * \brief Secure Flash lock down information provisioning.
- *
- * \param[in] secureflash     Secure Flash to be locked
- * \param[in] provision_data  Provisioning data indicating lock down information
- *
- * \return SECUREFLASH_ERROR_OK if successful,
- *         or a specific SECUREFLASH_ERROR_XXX error code
- */
-int32_t secureflash_lock_provision(secureflash_t *secureflash,
-                                   void *provision_data);
-/**
- * \brief Parse and store secure Flash provisioning data.
+ * \brief Perform secure Flash provisioning based on provisioning data.
  *
  * \param[in] secureflash     Secure Flash to be provisioned
  * \param[in] provision_data  Provisioning data
+ * \param[in] data_length     The size of provisioning data
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
-int32_t secureflash_write_provision(secureflash_t *secureflash,
-                                    void *provision_data);
-/**
- * \brief Read and parse secure Flash provisioning data.
- *
- * \param[in] secureflash     Secure Flash to be provisioned
- * \param[in] provision_data  Provisioning data
- *
- * \return SECUREFLASH_ERROR_OK if successful,
- *         or a specific SECUREFLASH_ERROR_XXX error code
- */
-int32_t secureflash_read_provision(secureflash_t *secureflash,
-                                   void *provision_data);
-
+int32_t secureflash_provision(secureflash_t *secureflash,
+                              uint8_t *provision_data, size_t data_length);
+#endif
 /* Deployment Functionality */
 
 /**
  * \brief Read data from secure Flash.
  *
  * \param[in]  secureflash     Secure Flash to read
- * \param[out] buffer          Pointer to a buffer storing data read from
+ * \param[out] buffer          buffer Buffer to store the data read from
  *                             secure Flash
- * \param[in]  addr            Data address
- * \param[in]  size            Number of data items to read
+ * \param[in]  addr            Target address of secure Flash
+ * \param[in]  size            Size of data items to read
  * \param[in]  app_id          Application id
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
 int32_t secureflash_secure_read(secureflash_t *secureflash, void *buffer,
@@ -146,11 +136,11 @@ int32_t secureflash_secure_read(secureflash_t *secureflash, void *buffer,
  * \param[in] secureflash      Secure Flash to program
  * \param[in] buffer           Pointer to a buffer containing data to be
  *                             programmed to secure Flash
- * \param[in] addr             Target address
+ * \param[in] addr             Target address of secure Flash
  * \param[in] size             Size of data to program
  * \param[in] app_id           Application id
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
 int32_t secureflash_secure_program(secureflash_t *secureflash,
@@ -164,7 +154,7 @@ int32_t secureflash_secure_program(secureflash_t *secureflash,
  * \param[in] size            Size to be erased in bytes
  * \param[in] app_id          Application id
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
 int32_t secureflash_secure_erase(secureflash_t *secureflash, size_t addr,
@@ -180,7 +170,7 @@ int32_t secureflash_secure_erase(secureflash_t *secureflash, size_t addr,
  * \param[in]  input_data      Pointer to input data
  * \param[in]  input_data_size The size of input_data in bytes
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
 int32_t secureflash_get_puf(secureflash_t *secureflash, uint8_t *puf,
@@ -195,7 +185,7 @@ int32_t secureflash_get_puf(secureflash_t *secureflash, uint8_t *puf,
  * \param[out] actual_size      The actual size of derived random number
  *                              in bytes
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
 int32_t secureflash_get_trng(secureflash_t *secureflash, uint8_t *random,
@@ -208,7 +198,7 @@ int32_t secureflash_get_trng(secureflash_t *secureflash, uint8_t *random,
  * \param[in]  size             Size of buffer
  * \param[out] actual_size      The actual size of derived unique id in bytes
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
 int32_t secureflash_get_uid(secureflash_t *secureflash, uint8_t *uid,
@@ -220,7 +210,7 @@ int32_t secureflash_get_uid(secureflash_t *secureflash, uint8_t *uid,
  * \param[in] mc_addr           Target monotonic counter
  * \param[in] app_id            Application id
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
 int32_t secureflash_increase_mc(secureflash_t *secureflash, uint8_t mc_addr,
@@ -235,12 +225,13 @@ int32_t secureflash_increase_mc(secureflash_t *secureflash, uint8_t mc_addr,
  * \param[out] actual_size      The actual size of counter value in bytes
  * \param[in]  app_id           Application id
  *
- * \return SECUREFLASH_ERROR_OK if successful,
+ * \return SECUREFLASH_SUCCESS if successful,
  *         or a specific SECUREFLASH_ERROR_XXX error code
  */
 int32_t secureflash_get_mc(secureflash_t *secureflash, uint8_t mc_addr,
                            uint8_t *mc, uint8_t size,
                            uint8_t *actual_size, int32_t app_id);
+
 /**@}*/
 #ifdef __cplusplus
 }

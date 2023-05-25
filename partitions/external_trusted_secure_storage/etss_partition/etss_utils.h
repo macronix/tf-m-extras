@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, Arm Limited. All rights reserved.
- * Copyright (c) 2020-2022 Macronix International Co. LTD. All rights reserved.
+ * Copyright (c) 2020-2023 Macronix International Co. LTD. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
@@ -80,8 +80,8 @@ typedef char err_msg[(data_size <= data_buf_size)*2 - 1]
  * \retval PSA_ERROR_INVALID_ARGUMENT  Otherwise
  */
 psa_status_t etss_utils_check_contained_in(size_t superset_size,
-                                          size_t subset_offset,
-                                          size_t subset_size);
+                                           size_t subset_offset,
+                                           size_t subset_size);
 
 /**
  * \brief Validates file ID

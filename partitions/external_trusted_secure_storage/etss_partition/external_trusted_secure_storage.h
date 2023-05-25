@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022 Macronix International Co. LTD. All rights reserved.
+ * Copyright (c) 2020-2023 Macronix International Co. LTD. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
@@ -12,7 +12,7 @@
 
 #include "psa/error.h"
 #include "psa/storage_common.h"
-#include "etss/etss_defs.h"
+#include "etss_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,7 +32,7 @@ extern "C" {
  *                                       unspecified internal failure
  */
 etss_err_t etss_init(void);
-
+#ifdef SECUREFLASH_PROVISION
 /**
  * \brief Secure Flash provisioning
  *
@@ -43,9 +43,10 @@ etss_err_t etss_init(void);
  * \return  ETSS_SUCCESS if operation succeed. Otherwise,
  *          it returns ETSS_XXX_ERROR.
  */
-etss_err_t etss_secure_flash_provisioning(int32_t client_id, uint8_t *prov_data,
+etss_err_t etss_secure_flash_provisioning(int32_t client_id,
+                                          const uint8_t *prov_data,
                                           size_t data_length);
-
+#endif
 /**
  * \brief Create a new, or modify an existing, uid/value pair
  *

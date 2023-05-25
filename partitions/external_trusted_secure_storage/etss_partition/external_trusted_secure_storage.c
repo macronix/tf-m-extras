@@ -1,17 +1,18 @@
 /*
- * Copyright (c) 2020-2022 Macronix International Co. LTD. All rights reserved.
+ * Copyright (c) 2020-2023 Macronix International Co. LTD. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
+#include <stdlib.h>
+#include <string.h>
 #include "external_trusted_secure_storage.h"
 #include "etss_req_mngr.h"
 #include "psa_manifest/pid.h"
-#include "tfm_memory_utils.h"
 #include "etss_utils.h"
 #include "external_secure_flash/etss_secureflash.h"
 #include "secureflash_fs/etss_flash_fs.h"
 #include "secureflash_error.h"
-
+#include "tfm_sp_log.h"//for debug
 
 #ifndef ETSS_BUF_SIZE
 /* By default, set the ETSS buffer size to the max asset size so that all
@@ -28,20 +29,6 @@
 #define ETSS_DEFAULT_EMPTY_BUFF_VAL 0
 #endif
 
-/* If secure Flash has several security regions which can be configured with
- * independent security policy and access permission,then it caters to etss
- * multi-client isolation. The allocated security region of each application id
- * (client id) should be indicated in secureflash_layout.h of each secure Flash.
- */
-#if defined(MULTI_CLIENT_ISOLATION)
-#define SECURE_FLASH_CLIENT_ID(x)    SECURE_FLASH_CLIENT##x##_ID
-#define SECURE_FLASH_CLIENT_AREA_START_ADDR(x)    \
-                                     SECURE_FLASH_CLIENT##x##_AREA_START_ADDR
-#define SECURE_FLASH_CLIENT_AREA_SIZE(x)          \
-                                     SECURE_FLASH_CLIENT##x##_AREA_SIZE
-#define SECURE_FLASH_CLIENT_SECTORS_PER_BLOCK(x)  \
-                                     SECURE_FLASH_CLIENT##x##_SECTORS_PER_BLOCK
-#endif
 /* Buffer to store asset data from the caller.
  * Note: size must be aligned to the max flash program unit to meet the
  * alignment requirement of the filesystem.
@@ -50,32 +37,33 @@ static uint8_t asset_data[ETSS_UTILS_ALIGN(ETSS_BUF_SIZE,
                                            ETSS_FLASH_ALIGNMENT)];
 static uint8_t g_fid[ETSS_FILE_ID_SIZE];
 
+/* Secure Flash with several secure regions configured with independent security
+ * policy and access permission, caters to ETSS multi-client isolation.
+ * The binding of applications and secure regions should also be allocated
+ * in corresponding secureflash_layout.h.
+ */
 #if defined(MULTI_CLIENT_ISOLATION)
     typedef struct etss_fs_ctx_info {
-        int32_t client_id;
-        etss_flash_fs_ctx_t fs_ctx;
+        int32_t client_id; /*!< Client ID */
+        etss_flash_fs_ctx_t fs_ctx; /*!< The file system context corresponding to each Client ID */
     }etss_fs_ctx_info_t;
-    static struct etss_flash_fs_config_t fs_cfg_etss[SECURE_FLASH_CLIENT_NUM] = {0};
-    static etss_fs_ctx_info_t etss_fs_ctx_tbl[SECURE_FLASH_CLIENT_NUM] = {0};
-    static etss_flash_fs_ctx_t *fs_ctx_etss_ptr;
+    static struct etss_flash_fs_config_t fs_cfg_etss[SECURE_FLASH_CLIENT_NUM] = {0}; /*!< The configuration of each client's file system */
+    static etss_fs_ctx_info_t etss_fs_ctx_tbl[SECURE_FLASH_CLIENT_NUM] = {0}; /*!< The table of clients' file system contexts */
+    static etss_flash_fs_ctx_t *fs_ctx_etss_ptr; /*!< The pointer of file system context */
 #else
+/* If multi-client isolation is disabled, only one file system context is needed.
+ */
     static etss_flash_fs_ctx_t fs_ctx_etss;
     static etss_flash_fs_ctx_t *fs_ctx_etss_ptr = &fs_ctx_etss;
 #endif
 static struct etss_file_info_t g_file_info;
-
-
-vendor_op_register_t secureflash_vendor_impl = {
-    .sf_name = SECURE_FLASH_NAME,
-    .vendor_op_register = SECURE_FLASH_VENDOR_OP_REGISTER,
-};
-secureflash_t secureflash = {
+/* Declare secure flash instance */
+static secureflash_t secureflash = {
     ._init_ref_count = 0,
     ._is_initialized = false,
-    .vendor_op_register = &secureflash_vendor_impl,
 };
-
-static struct etss_flash_fs_config_t fs_cfg_etss_common = {
+/* Base configure of ETSS file system */
+static struct etss_flash_fs_config_t etss_flash_fs_config_base = {
     .flash_dev = &secureflash,
     .program_unit = ETSS_FLASH_ALIGNMENT,
     .max_file_size = ETSS_UTILS_ALIGN(ETSS_MAX_ASSET_SIZE, ETSS_FLASH_ALIGNMENT),
@@ -92,8 +80,8 @@ static void etss_get_fid(int32_t client_id,
                          psa_storage_uid_t uid,
                          uint8_t *fid)
 {
-    tfm_memcpy(fid, (const void *)&client_id, sizeof(client_id));
-    tfm_memcpy(fid + sizeof(client_id), (const void *)&uid, sizeof(uid));
+    memcpy(fid, (const void *)&client_id, sizeof(client_id));
+    memcpy(fid + sizeof(client_id), (const void *)&uid, sizeof(uid));
 }
 
 #if defined(MULTI_CLIENT_ISOLATION)
@@ -103,67 +91,84 @@ static void etss_get_fid(int32_t client_id,
  * \return Returns ETSS_SUCCESS if there is already a fs_ctx for given fs_ctx,
  *         and ETSS_ERROR_DOES_NOT_EXIST otherwise.
  */
-etss_err_t etss_get_fs_ctx(int32_t client_id, etss_flash_fs_ctx_t *fs_ctx)
+static etss_err_t etss_get_fs_ctx(int32_t client_id, etss_flash_fs_ctx_t **fs_ctx)
 {
     for (uint8_t i = 0; i < SECURE_FLASH_CLIENT_NUM; i++) {
         if (etss_fs_ctx_tbl[i].client_id == client_id) {
-            fs_ctx = &(etss_fs_ctx_tbl[i].fs_ctx);
+            *fs_ctx = &(etss_fs_ctx_tbl[i].fs_ctx);
             return ETSS_SUCCESS;
         }
     }
-    return ETSS_ERROR_DOES_NOT_EXIST;
+    return ETSS_ERR_DOES_NOT_EXIST;
 }
 #endif
 
 /**
- * \brief Initialize the static filesystem configurations.
+ * \brief Initialize file system configurations.
  *
- * \return Returns PSA_ERROR_PROGRAMMER_ERROR if there is a configuration error,
+ * \return Returns PSA_ERROR_PROGRAMMER_ERROR if there is any configuration error,
  *         and PSA_SUCCESS otherwise.
  */
-etss_err_t init_fs_cfg(void)
+static etss_err_t init_fs_cfg(void)
 {
+    /* Retrieve secure flash file system parameters defined in secureflash_layout.h */
+    etss_flash_fs_config_base.sector_size = SECURE_FLASH_SECTOR_SIZE;
+    etss_flash_fs_config_base.erase_val = SECURE_FLASH_ERASED_VALUE;
+    etss_flash_fs_config_base.flash_area_addr = SECURE_FLASH_START_ADDR;
+    etss_flash_fs_config_base.block_size = etss_flash_fs_config_base.sector_size * SECURE_FLASH_SECTORS_PER_BLOCK;
+    etss_flash_fs_config_base.num_blocks = SECURE_FLASH_DEFAULT_CLIENT_AREA_SIZE / etss_flash_fs_config_base.block_size;
 #if defined(MULTI_CLIENT_ISOLATION)
     for (uint8_t i = 0; i < SECURE_FLASH_CLIENT_NUM; i++) {
         /* common cfg*/
-        fs_cfg_etss[i].flash_dev = fs_cfg_etss_common.flash_dev;
-        fs_cfg_etss[i].program_unit = fs_cfg_etss_common.program_unit;
-        fs_cfg_etss[i].max_file_size = fs_cfg_etss_common.max_file_size;
-        fs_cfg_etss[i].max_num_files = fs_cfg_etss_common.max_num_files;
+        fs_cfg_etss[i].flash_dev = etss_flash_fs_config_base.flash_dev;
+        fs_cfg_etss[i].program_unit = etss_flash_fs_config_base.program_unit;
+        fs_cfg_etss[i].max_file_size = etss_flash_fs_config_base.max_file_size;
+        fs_cfg_etss[i].max_num_files = etss_flash_fs_config_base.max_num_files;
         fs_cfg_etss[i].sector_size = SECURE_FLASH_SECTOR_SIZE;
         fs_cfg_etss[i].erase_val = SECURE_FLASH_ERASED_VALUE;
-        /* specific cfg*/
-        fs_cfg_etss[i].flash_area_addr = SECURE_FLASH_CLIENT_AREA_START_ADDR(i);
-        fs_cfg_etss[i].block_size = fs_cfg_etss[i].sector_size *
-                                    SECURE_FLASH_CLIENT_SECTORS_PER_BLOCK(i);
-        fs_cfg_etss[i].num_blocks = SECURE_FLASH_CLIENT_AREA_SIZE(i) /
-                                    fs_cfg_etss[i].block_size;
     }
-#else
-    /* Retrieve flash properties from the ETSS flash driver */
-    fs_cfg_etss_common.sector_size = SECURE_FLASH_SECTOR_SIZE;
-    fs_cfg_etss_common.erase_val = SECURE_FLASH_ERASED_VALUE;
-    /* Retrieve FS parameters defined in secureflash_layout.h */
-    fs_cfg_etss_common.flash_area_addr = SECURE_FLASH_START_ADDR;
-    fs_cfg_etss_common.block_size = fs_cfg_etss_common.sector_size *
-                                    SECURE_FLASH_SECTORS_PER_BLOCK;
-    fs_cfg_etss_common.num_blocks = SECURE_FLASH_SIZE /
-                                    fs_cfg_etss_common.block_size;
+    /* client 0 specific file system context */
+    fs_cfg_etss[0].flash_area_addr = SECURE_FLASH_CLIENT0_AREA_START_ADDR;
+    fs_cfg_etss[0].block_size = fs_cfg_etss[0].sector_size * SECURE_FLASH_CLIENT0_SECTORS_PER_BLOCK;
+    fs_cfg_etss[0].num_blocks = SECURE_FLASH_CLIENT0_AREA_SIZE / fs_cfg_etss[0].block_size;
+    etss_fs_ctx_tbl[0].client_id = SECURE_FLASH_CLIENT0_ID;
+#if (SECURE_FLASH_CLIENT_NUM >= 2)
+    /* client 1 specific file system context */
+    fs_cfg_etss[1].flash_area_addr = SECURE_FLASH_CLIENT1_AREA_START_ADDR;
+    fs_cfg_etss[1].block_size = fs_cfg_etss[1].sector_size * SECURE_FLASH_CLIENT1_SECTORS_PER_BLOCK;
+    fs_cfg_etss[1].num_blocks = SECURE_FLASH_CLIENT1_AREA_SIZE / fs_cfg_etss[1].block_size;
+    etss_fs_ctx_tbl[1].client_id = SECURE_FLASH_CLIENT1_ID;
+#endif
+#if (SECURE_FLASH_CLIENT_NUM >= 3)
+    /* client 2 specific file system context */
+    fs_cfg_etss[2].flash_area_addr = SECURE_FLASH_CLIENT2_AREA_START_ADDR;
+    fs_cfg_etss[2].block_size = fs_cfg_etss[2].sector_size * SECURE_FLASH_CLIENT2_SECTORS_PER_BLOCK;
+    fs_cfg_etss[2].num_blocks = SECURE_FLASH_CLIENT2_AREA_SIZE / fs_cfg_etss[2].block_size;
+    etss_fs_ctx_tbl[2].client_id = SECURE_FLASH_CLIENT2_ID;
+#endif
+#if (SECURE_FLASH_CLIENT_NUM >= 4)
+    /* client 3 specific file system context */
+    fs_cfg_etss[3].flash_area_addr = SECURE_FLASH_CLIENT3_AREA_START_ADDR;
+    fs_cfg_etss[3].block_size = fs_cfg_etss[3].sector_size * SECURE_FLASH_CLIENT3_SECTORS_PER_BLOCK;
+    fs_cfg_etss[3].num_blocks = SECURE_FLASH_CLIENT3_AREA_SIZE / fs_cfg_etss[3].block_size;
+    etss_fs_ctx_tbl[3].client_id = SECURE_FLASH_CLIENT3_ID;
+#endif
+#if (SECURE_FLASH_CLIENT_NUM >= 5)
+    //TODO
+#endif
 #endif
     return ETSS_SUCCESS;
 }
 
-etss_err_t etss_flash_fs_init_ctx_and_prepare(
-                                    etss_flash_fs_ctx_t *fs_ctx,
-                                    const struct etss_flash_fs_config_t *fs_cfg,
-                                    const struct etss_flash_fs_ops_t *fs_ops)
+static etss_err_t etss_flash_fs_init_ctx_and_prepare(etss_flash_fs_ctx_t *fs_ctx,
+                                                     const struct etss_flash_fs_config_t *fs_cfg,
+                                                     const struct etss_flash_fs_ops_t *fs_ops)
 {
     psa_status_t status;
     status = etss_flash_fs_init_ctx(fs_ctx, fs_cfg, fs_ops);
     if (status == PSA_SUCCESS) {
-        /* Prepare the ETSS filesystem */
+        /* Prepare the ETSS file system */
         status = etss_flash_fs_prepare(fs_ctx);
-
 #ifdef ETSS_CREATE_FLASH_LAYOUT
         /* If ETSS_CREATE_FLASH_LAYOUT is set, it indicates that it is required
          * to create a ETSS flash layout. ETSS service will generate an empty
@@ -194,38 +199,36 @@ etss_err_t etss_flash_fs_init_ctx_and_prepare(
     return ETSS_ERR_STORAGE_FAILURE;
 }
 
-
 etss_err_t etss_init(void)
 {
     int32_t err;
     err = secureflash_init(&secureflash);
-    if (err != SECUREFLASH_ERROR_OK) {
-        if (err == SECUREFLASH_ERROR_UNPROVISIONED) {
+    if (err != SECUREFLASH_SUCCESS) {
+        if ((err == SECUREFLASH_ERROR_GET_PROVISION_INFO) ||
+            (err == SECUREFLASH_ERROR_SECURE_INIT)){
             return ETSS_ERR_SF_UNPROVISIONED;
         } else {
-            return ETSS_ERR_STORAGE_FAILURE;
+            return ETSS_ERR_SF_INIT;
         }
     }
-    if (secureflash.sf_ctx->flash_profile.security_feature.security_storage) {
+    if (secureflash.flash_info.flash_profile->security_feature.security_storage) {
         err = init_fs_cfg();
         if (err != ETSS_SUCCESS) {
             return err;
         }
-        /* Initialize the ETSS filesystem context */
+        /* Initialize ETSS file system contexts */
     #if defined(MULTI_CLIENT_ISOLATION)
         for (uint8_t i = 0; i < SECURE_FLASH_CLIENT_NUM; i++) {
-            etss_fs_ctx_tbl[i].client_id = SECURE_FLASH_CLIENT_ID(i);
-            err = etss_flash_fs_init_ctx_and_prepare(
-                                                  &(etss_fs_ctx_tbl[i].fs_ctx),
-                                                  &fs_cfg_etss[i],
-                                                  &etss_secure_flash_fs_ops);
+            err = etss_flash_fs_init_ctx_and_prepare(&(etss_fs_ctx_tbl[i].fs_ctx),
+                                                     &fs_cfg_etss[i],
+                                                     &etss_secure_flash_fs_ops);
             if (err != ETSS_SUCCESS) {
                 return ETSS_ERR_STORAGE_FAILURE;
             }
         }
     #else
         err = etss_flash_fs_init_ctx_and_prepare(&fs_ctx_etss,
-                                                 &fs_cfg_etss_common,
+                                                 &etss_flash_fs_config_base,
                                                  &etss_secure_flash_fs_ops);
         if (err != ETSS_SUCCESS) {
             return ETSS_ERR_STORAGE_FAILURE;
@@ -235,20 +238,23 @@ etss_err_t etss_init(void)
     return err;
 }
 
+#ifdef SECUREFLASH_PROVISION
 etss_err_t etss_secure_flash_provisioning(int32_t client_id,
-                                          uint8_t *prov_data,
+                                          const uint8_t *prov_data,
                                           size_t data_length)
 {
+	LOG_INFFMT("etss_secure_flash_provisioning\r\n");
+    (void)client_id;
     int32_t status;
-    status = secureflash_write_provision(&secureflash, prov_data);
+    status = secureflash_provision(&secureflash, prov_data, data_length);
     if (status) {
         return ETSS_ERR_SF_PROVISION;
     } else {
         return ETSS_SUCCESS;
     }
-    /* FIXME:Verify provisioning data is needed */
     /* FIXME:Has been provisioned already */
 }
+#endif
 
 etss_err_t etss_set(int32_t client_id,
                     psa_storage_uid_t uid,
@@ -256,10 +262,9 @@ etss_err_t etss_set(int32_t client_id,
                     psa_storage_create_flags_t create_flags)
 {
     psa_status_t status;
-    size_t write_size;
-    size_t offset;
+    size_t write_size, offset;
     uint32_t flags;
-    if (secureflash.sf_ctx->flash_profile.security_feature.security_storage) {
+    if (secureflash.flash_info.flash_profile->security_feature.security_storage) {
         /* Check that the UID is valid */
         if (uid == ETSS_INVALID_UID) {
             return ETSS_ERR_INVALID_ARGUMENT;
@@ -271,12 +276,13 @@ etss_err_t etss_set(int32_t client_id,
             return ETSS_ERR_NOT_SUPPORTED;
         }
         /* Set file id */
-        tfm_memset(g_fid, 0x00, ETSS_FILE_ID_SIZE);
+        memset(g_fid, 0x00, ETSS_FILE_ID_SIZE);
         etss_get_fid(client_id, uid, g_fid);
-        etss_client_id_pass_through(client_id);
+        /* Pass client id to secure flash operation layer */
+        etss_client_id_pass_on(client_id);
 #if defined(MULTI_CLIENT_ISOLATION)
-        if (etss_get_fs_ctx(client_id, fs_ctx_etss_ptr)) {
-            return ETSS_ERR_NOT_SUPPORTED;
+        if (etss_get_fs_ctx(client_id, &fs_ctx_etss_ptr)) {
+            return ETSS_ERR_NOT_PERMITTED;
         }
 #endif
         status = etss_flash_fs_file_get_info(fs_ctx_etss_ptr, g_fid,
@@ -331,19 +337,20 @@ etss_err_t etss_get(int32_t client_id,
 {
     psa_status_t status;
     size_t read_size;
-    if (secureflash.sf_ctx->flash_profile.security_feature.security_storage) {
+    if (secureflash.flash_info.flash_profile->security_feature.security_storage) {
         /* Check that the UID is valid */
         if (uid == ETSS_INVALID_UID) {
             return ETSS_ERR_INVALID_ARGUMENT;
         }
         /* Set file id */
-        tfm_memset(g_fid, 0x00, ETSS_FILE_ID_SIZE);
+        memset(g_fid, 0x00, ETSS_FILE_ID_SIZE);
         etss_get_fid(client_id, uid, g_fid);
         /* Pass client id to underlying etss_secureflash */
-        etss_client_id_pass_through(client_id);
+        etss_client_id_pass_on(client_id);
+
     #if defined(MULTI_CLIENT_ISOLATION)
-        if (etss_get_fs_ctx(client_id, fs_ctx_etss_ptr)) {
-            return ETSS_ERR_NOT_SUPPORTED;
+        if (etss_get_fs_ctx(client_id, &fs_ctx_etss_ptr)) {
+            return ETSS_ERR_NOT_PERMITTED;
         }
     #endif
         /* Read file info */
@@ -389,22 +396,23 @@ etss_err_t etss_get_info(int32_t client_id, psa_storage_uid_t uid,
                          struct psa_storage_info_t *p_info)
 {
     psa_status_t status;
-    if (secureflash.sf_ctx->flash_profile.security_feature.security_storage) {
+    if (secureflash.flash_info.flash_profile->security_feature.security_storage) {
         /* Check that the UID is valid */
         if (uid == ETSS_INVALID_UID) {
             return ETSS_ERR_INVALID_ARGUMENT;
         }
         /* Set file id */
-        tfm_memset(g_fid, 0x00, ETSS_FILE_ID_SIZE);
+        memset(g_fid, 0x00, ETSS_FILE_ID_SIZE);
         etss_get_fid(client_id, uid, g_fid);
-        etss_client_id_pass_through(client_id);
+        etss_client_id_pass_on(client_id);
 #if defined(MULTI_CLIENT_ISOLATION)
-        if (etss_get_fs_ctx(client_id, fs_ctx_etss_ptr)) {
-            return ETSS_ERR_NOT_SUPPORTED;
+        if (etss_get_fs_ctx(client_id, &fs_ctx_etss_ptr)) {
+            return ETSS_ERR_NOT_PERMITTED;
         }
 #endif
         /* Read file info */
-        status = etss_flash_fs_file_get_info(fs_ctx_etss_ptr, g_fid,
+        status = etss_flash_fs_file_get_info(fs_ctx_etss_ptr,
+                                             g_fid,
                                              &g_file_info);
         if (status != PSA_SUCCESS) {
             return (etss_err_t)status;
@@ -422,22 +430,24 @@ etss_err_t etss_get_info(int32_t client_id, psa_storage_uid_t uid,
 etss_err_t etss_remove(int32_t client_id, psa_storage_uid_t uid)
 {
     psa_status_t status;
-    if (secureflash.sf_ctx->flash_profile.security_feature.security_storage) {
+    if (secureflash.flash_info.flash_profile->security_feature.security_storage) {
         /* Check that the UID is valid */
         if (uid == ETSS_INVALID_UID) {
             return ETSS_ERR_INVALID_ARGUMENT;
         }
         /* Set file id */
-        tfm_memset(g_fid, 0x00, ETSS_FILE_ID_SIZE);
+        memset(g_fid, 0x00, ETSS_FILE_ID_SIZE);
         etss_get_fid(client_id, uid, g_fid);
-        etss_client_id_pass_through(client_id);
+        etss_client_id_pass_on(client_id);
+
 #if defined(MULTI_CLIENT_ISOLATION)
-        if (etss_get_fs_ctx(client_id, fs_ctx_etss_ptr)) {
-            return ETSS_ERR_NOT_SUPPORTED;
+        if (etss_get_fs_ctx(client_id, &fs_ctx_etss_ptr)) {
+            return ETSS_ERR_NOT_PERMITTED;
         }
 #endif
         /* Read file info */
-        status = etss_flash_fs_file_get_info(fs_ctx_etss_ptr, g_fid,
+        status = etss_flash_fs_file_get_info(fs_ctx_etss_ptr,
+                                             g_fid,
                                              &g_file_info);
         if (status != PSA_SUCCESS) {
             return (etss_err_t)status;
@@ -461,10 +471,9 @@ etss_err_t etss_get_puf(int32_t client_id, size_t buf_size, size_t *puf_len)
     uint8_t puf[SECURE_FLASH_MAX_PUF_SIZE];
     int32_t status;
     uint8_t actual_size;
-    if (secureflash.sf_ctx->flash_profile.security_feature.PUF) {
-        status = secureflash_get_puf(&secureflash, puf, sizeof(puf),
-                                     &actual_size, NULL, 0);
-        if (SECUREFLASH_ERROR_OK != status) {
+    if (secureflash.flash_info.flash_profile->security_feature.PUF) {
+        status = secureflash_get_puf(&secureflash, puf, sizeof(puf), &actual_size, NULL, 0);
+        if (status != SECUREFLASH_SUCCESS) {
             return ETSS_ERR_STORAGE_FAILURE;
         }
         buf_size = ETSS_UTILS_MIN(buf_size, actual_size);
@@ -483,11 +492,10 @@ etss_err_t etss_generate_random_number(int32_t client_id, size_t buf_size,
     int32_t status;
     uint8_t actual_size;
     *random_len = 0;
-    if (secureflash.sf_ctx->flash_profile.security_feature.RNG) {
+    if (secureflash.flash_info.flash_profile->security_feature.RNG) {
         while (buf_size > 0) {
-            status = secureflash_get_trng(&secureflash, random, buf_size,
-                                          &actual_size);
-            if (SECUREFLASH_ERROR_OK != status) {
+            status = secureflash_get_trng(&secureflash, random, buf_size, &actual_size);
+            if (status != SECUREFLASH_SUCCESS) {
                 return ETSS_ERR_STORAGE_FAILURE;
             }
             actual_size = ETSS_UTILS_MIN(buf_size, actual_size);
@@ -501,10 +509,13 @@ etss_err_t etss_generate_random_number(int32_t client_id, size_t buf_size,
     }
 }
 
+/*
+*Increase monotonic counter by one:
+*/
 etss_err_t etss_mc_increment(int32_t client_id, uint8_t mc_id)
 {
-    if (secureflash.sf_ctx->flash_profile.security_feature.RPMC) {
-        if (0 != secureflash_increase_mc(&secureflash, mc_id, client_id)) {
+    if (secureflash.flash_info.flash_profile->security_feature.RPMC) {
+        if (secureflash_increase_mc(&secureflash, mc_id, client_id) != 0) {
             return ETSS_ERR_STORAGE_FAILURE;
         }
         return ETSS_SUCCESS;
@@ -517,9 +528,9 @@ etss_err_t etss_mc_get(int32_t client_id, uint8_t mc_id, size_t size)
 {
     uint8_t mc[SECURE_FLASH_MAX_MC_SIZE];
     uint8_t actual_size;
-    if (secureflash.sf_ctx->flash_profile.security_feature.RPMC) {
-        if (0 != secureflash_get_mc(&secureflash, mc_id, mc, size, &actual_size,
-                                    client_id)) {
+    if (secureflash.flash_info.flash_profile->security_feature.RPMC) {
+        if (secureflash_get_mc(&secureflash, mc_id, mc,
+                               size, &actual_size, client_id) != 0) {
             return ETSS_ERR_STORAGE_FAILURE;
         }
         size = ETSS_UTILS_MIN(size, actual_size);

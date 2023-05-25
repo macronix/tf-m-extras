@@ -5,14 +5,12 @@
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
-
-#include "etss_flash_fs.h"
-
 #include <stdbool.h>
-
+#include <string.h>
+#include "etss_flash_fs.h"
 #include "etss_flash_fs_dblock.h"
-#include "tfm_memory_utils.h"
 #include "etss_utils.h"
+#include "tfm_sp_log.h"//for debug
 
 /* Filesystem-internal flags, which cannot be passed by the caller */
 #define ETSS_FLASH_FS_INTERNAL_FLAGS_MASK  (UINT32_MAX - ((1U << 24) - 1))
@@ -152,7 +150,7 @@ psa_status_t etss_flash_fs_init_ctx(etss_flash_fs_ctx_t *fs_ctx,
     }
 
     /* Zero the context */
-    tfm_memset(fs_ctx, 0, sizeof(*fs_ctx));
+    memset(fs_ctx, 0, sizeof(*fs_ctx));
 
     /* Associate the filesystem config and operations with the context */
     fs_ctx->cfg = fs_cfg;
@@ -228,7 +226,7 @@ psa_status_t etss_flash_fs_file_get_info(struct etss_flash_fs_ctx_t *fs_ctx,
     }
 
     /* Check if index is still referring to same file */
-    if (tfm_memcmp(fid, tmp_metadata.id, ETSS_FILE_ID_SIZE)) {
+    if (memcmp(fid, tmp_metadata.id, ETSS_FILE_ID_SIZE)) {
         return PSA_ERROR_DOES_NOT_EXIST;
     }
 
@@ -325,6 +323,7 @@ psa_status_t etss_flash_fs_file_write(struct etss_flash_fs_ctx_t *fs_ctx,
                                                 max_size, flags, &new_idx,
                                                 &file_meta, &block_meta);
         if (err != PSA_SUCCESS) {
+        	LOG_INFFMT("etss_flash_fs_mblock_reserve_file status:%d\r\n",err);
             return err;
         }
     } else {
@@ -332,6 +331,7 @@ psa_status_t etss_flash_fs_file_write(struct etss_flash_fs_ctx_t *fs_ctx,
         err = etss_flash_fs_mblock_read_block_metadata(fs_ctx, file_meta.lblock,
                                                        &block_meta);
         if (err != PSA_SUCCESS) {
+        	LOG_INFFMT("etss_flash_fs_mblock_read_block_metadata status:%d\r\n",err);
             return PSA_ERROR_GENERIC_ERROR;
         }
     }
@@ -587,7 +587,7 @@ psa_status_t etss_flash_fs_file_read(struct etss_flash_fs_ctx_t *fs_ctx,
     }
 
     /* Check if index is still referring to same file */
-    if (tfm_memcmp(fid, tmp_metadata.id, ETSS_FILE_ID_SIZE)) {
+    if (memcmp(fid, tmp_metadata.id, ETSS_FILE_ID_SIZE)) {
         return PSA_ERROR_DOES_NOT_EXIST;
     }
 

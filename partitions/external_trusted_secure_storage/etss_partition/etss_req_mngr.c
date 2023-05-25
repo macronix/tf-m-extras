@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022 Macronix International Co. LTD. All rights reserved.
+ * Copyright (c) 2020-2023 Macronix International Co. LTD. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
@@ -10,13 +10,16 @@
 #include "psa/service.h"
 #include "psa_manifest/etss.h"
 #include "external_trusted_secure_storage.h"
-#include "etss/etss_defs.h"
+#include "etss_defs.h"
 #include "tfm_hal_platform.h"
-
+#include "tfm_sp_log.h"//for debug
 typedef etss_err_t (*etss_func_t)(void);
 static psa_msg_t msg;
 
-
+#if defined(ETSS_PROV_DEVELOPER_MODE) && (ETSS_PROV_DEVELOPER_MODE == 1)
+extern const uint8_t PROVISIONING_BLOB[];
+extern const uint32_t PROVISIONING_BLOB_SIZE;
+#endif
 static etss_err_t etss_set_ipc(void)
 {
     psa_storage_uid_t uid;
@@ -150,6 +153,7 @@ static etss_err_t etss_mc_get_ipc(void)
     return etss_mc_get(msg.client_id, mc_id, mc_size);
 }
 
+#ifdef SECUREFLASH_PROVISION
 static int32_t etss_secure_flash_provisioning_ipc(const psa_msg_t *msg)
 {
     size_t data_length;
@@ -166,6 +170,7 @@ static int32_t etss_secure_flash_provisioning_ipc(const psa_msg_t *msg)
     return etss_secure_flash_provisioning(msg->client_id, prov_data,
                                           data_length);
 }
+#endif
 
 static void etss_signal_handle(psa_signal_t signal, etss_func_t pfn)
 {
@@ -191,16 +196,19 @@ static void etss_signal_handle(psa_signal_t signal, etss_func_t pfn)
     }
 }
 
-
 etss_err_t etss_req_mngr_init(void)
 {
     etss_err_t err;
-    psa_status_t status;
     psa_signal_t signals = 0;
-
     err = etss_init();
     if (err != ETSS_SUCCESS) {
+    	LOG_INFFMT("etss init err:%d\r\n",err);
+#ifdef SECUREFLASH_PROVISION
+        psa_status_t status;
         if (err == ETSS_ERR_SF_UNPROVISIONED) {
+#if defined(ETSS_PROV_DEVELOPER_MODE) && (ETSS_PROV_DEVELOPER_MODE == 1)
+            return etss_secure_flash_provisioning(0xFF, PROVISIONING_BLOB, PROVISIONING_BLOB_SIZE);
+#else
             while (1) {
                 (void)psa_wait(ETSS_SECURE_FLASH_PROVISIONING_SIGNAL, PSA_BLOCK);
                 (void)psa_get(ETSS_SECURE_FLASH_PROVISIONING_SIGNAL, &msg);
@@ -210,13 +218,14 @@ etss_err_t etss_req_mngr_init(void)
                     psa_reply(msg.handle, PSA_SUCCESS);
                     break;
                 case PSA_IPC_CALL:
-                    status =
-                        (psa_status_t)etss_secure_flash_provisioning_ipc(&msg);
+                    status = (psa_status_t)etss_secure_flash_provisioning_ipc(&msg);
                     psa_reply(msg.handle, status);
                     break;
                 }
             }
+#endif
         }
+#endif
         tfm_hal_system_reset();/* Reset */
     }
     while (1) {

@@ -48,7 +48,7 @@ extern "C" {
  * \brief Structure containing the flash filesystem configuration parameters.
  */
 struct etss_flash_fs_config_t {
-    const void *flash_dev;    /**< Pointer to the flash device */
+    secureflash_t *flash_dev; /**< Pointer to secure flash device */
     uint32_t flash_area_addr; /**< Base address of the flash region */
     uint32_t sector_size;     /**< Size of the flash device's physical erase
                                *   unit

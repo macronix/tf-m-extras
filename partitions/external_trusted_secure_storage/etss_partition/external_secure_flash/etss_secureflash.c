@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022 Macronix International Co. LTD. All rights reserved.
+ * Copyright (c) 2020-2023 Macronix International Co. LTD. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  */
@@ -24,61 +24,54 @@ static size_t get_phys_address(const struct etss_flash_fs_config_t *cfg,
     return cfg->flash_area_addr + (block_id * cfg->block_size) + offset;
 }
 
-
-static etss_err_t etss_secureflash_init(
-                                       const struct etss_flash_fs_config_t *cfg)
+static psa_status_t etss_secureflash_init(const struct etss_flash_fs_config_t *cfg)
 {
     secureflash_t *secureflash = (secureflash_t *)cfg->flash_dev;
     secureflash_app_id = SP_ETSS;
     if (secureflash_init(secureflash)) {
-        return ETSS_ERR_STORAGE_FAILURE;
+        return PSA_ERROR_STORAGE_FAILURE;
     }
-    return ETSS_SUCCESS;
+    return PSA_SUCCESS;
 }
 
-static etss_err_t etss_secureflash_read(
-                                       const struct etss_flash_fs_config_t *cfg,
-                                       uint32_t block_id, uint8_t *buffer,
-                                       size_t offset, size_t size)
+static psa_status_t etss_secureflash_read(const struct etss_flash_fs_config_t *cfg,
+                                        uint32_t block_id, uint8_t *buffer,
+                                        size_t offset, size_t size)
 {
     secureflash_t *secureflash = (secureflash_t *)cfg->flash_dev;
     size_t addr = get_phys_address(cfg, block_id, offset);
     if (secureflash_secure_read(secureflash, buffer, addr,
                                 size, secureflash_app_id)) {
-        return ETSS_ERR_STORAGE_FAILURE;
+        return PSA_ERROR_STORAGE_FAILURE;
     }
-    return ETSS_SUCCESS;
+    return PSA_SUCCESS;
 }
 
-
-static etss_err_t etss_secureflash_write(
-                                       const struct etss_flash_fs_config_t *cfg,
-                                       uint32_t block_id,
-                                       const uint8_t *buffer,
-                                       size_t offset, size_t size)
+static psa_status_t etss_secureflash_write(const struct etss_flash_fs_config_t *cfg,
+                                         uint32_t block_id,
+                                         const uint8_t *buffer,
+                                         size_t offset, size_t size)
 {
     secureflash_t *secureflash = (secureflash_t *)cfg->flash_dev;
     size_t addr = get_phys_address(cfg, block_id, offset);
     if (secureflash_secure_program(secureflash, buffer, addr,
                                    size, secureflash_app_id)) {
-        return ETSS_ERR_STORAGE_FAILURE;
+        return PSA_ERROR_STORAGE_FAILURE;
     }
-    return ETSS_SUCCESS;
+    return PSA_SUCCESS;
 }
 
-static etss_err_t etss_secureflash_flush(
-                                       const struct etss_flash_fs_config_t *cfg)
+static psa_status_t etss_secureflash_flush(const struct etss_flash_fs_config_t *cfg)
 {
     /* Nothing needs to be done for NOR flash, as writes are commited to flash
      * immediately.
      */
     (void)cfg;
-    return ETSS_SUCCESS;
+    return PSA_SUCCESS;
 }
 
-static etss_err_t etss_secureflash_erase(
-                                       const struct etss_flash_fs_config_t *cfg,
-                                       uint32_t block_id)
+static psa_status_t etss_secureflash_erase(const struct etss_flash_fs_config_t *cfg,
+                                         uint32_t block_id)
 {
     size_t addr;
     size_t offset;
@@ -87,13 +80,13 @@ static etss_err_t etss_secureflash_erase(
         addr = get_phys_address(cfg, block_id, offset);
         if (secureflash_secure_erase(secureflash, addr,
             cfg->sector_size, secureflash_app_id)) {
-            return ETSS_ERR_STORAGE_FAILURE;
+            return PSA_ERROR_STORAGE_FAILURE;
         }
     }   
-return ETSS_SUCCESS;
+    return PSA_SUCCESS;
 }
 
-void etss_client_id_pass_through(int32_t client_id)
+void etss_client_id_pass_on(int32_t client_id)
 {
     secureflash_app_id = client_id;
 }
