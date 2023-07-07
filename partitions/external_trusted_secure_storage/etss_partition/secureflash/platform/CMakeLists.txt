@@ -14,11 +14,14 @@ add_library(secureflash_platform STATIC)
 target_sources(secureflash_platform
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/template/spi_nor_hc.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/template/plat_secure_flash.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/template/low_level_spi.c
 )
 
 target_include_directories(secureflash_platform
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/template
 )
 
 target_link_libraries(secureflash_platform

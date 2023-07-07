@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "include/secureflash_error.h"
-#include "JEDEC_security_HAL/vendor_impl/vendor_secureflash_defs.h"
+#include "TG424_3/vendor_impl/vendor_secureflash_defs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -99,7 +99,6 @@ int32_t secureflash_init(secureflash_t *secureflash);
  */
 int32_t secureflash_uninit(secureflash_t *secureflash);
 /* Provisioning Functionality */
-#ifdef SECUREFLASH_PROVISION
 /**
  * \brief Perform secure Flash provisioning based on provisioning data.
  *
@@ -112,7 +111,6 @@ int32_t secureflash_uninit(secureflash_t *secureflash);
  */
 int32_t secureflash_provision(secureflash_t *secureflash,
                               uint8_t *provision_data, size_t data_length);
-#endif
 /* Deployment Functionality */
 
 /**

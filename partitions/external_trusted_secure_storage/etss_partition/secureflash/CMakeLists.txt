@@ -12,17 +12,17 @@ cmake_policy(SET CMP0079 NEW)
 add_library(hw_secure_flash STATIC)
 target_include_directories(hw_secure_flash
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/JEDEC_security_HAL
+        ${CMAKE_CURRENT_SOURCE_DIR}/TG424_3
         ${CMAKE_CURRENT_SOURCE_DIR}/spi_nor_flash
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${TFM_PATH}/platform/ext/driver
-        ${CMAKE_CURRENT_SOURCE_DIR}/JEDEC_security_HAL/vendor_impl/${SECUREFLASH_TYPE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/TG424_3/vendor_impl/${SECUREFLASH_TYPE}
 )
 add_subdirectory(platform)
 add_subdirectory(spi_nor_flash)
-add_subdirectory(JEDEC_security_HAL)
+add_subdirectory(TG424_3)
 
 target_sources(hw_secure_flash
     PRIVATE

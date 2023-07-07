@@ -12,7 +12,6 @@
 #include "external_secure_flash/etss_secureflash.h"
 #include "secureflash_fs/etss_flash_fs.h"
 #include "secureflash_error.h"
-#include "tfm_sp_log.h"//for debug
 
 #ifndef ETSS_BUF_SIZE
 /* By default, set the ETSS buffer size to the max asset size so that all
@@ -238,12 +237,11 @@ etss_err_t etss_init(void)
     return err;
 }
 
-#ifdef SECUREFLASH_PROVISION
+
 etss_err_t etss_secure_flash_provisioning(int32_t client_id,
                                           const uint8_t *prov_data,
                                           size_t data_length)
 {
-	LOG_INFFMT("etss_secure_flash_provisioning\r\n");
     (void)client_id;
     int32_t status;
     status = secureflash_provision(&secureflash, prov_data, data_length);
@@ -254,7 +252,7 @@ etss_err_t etss_secure_flash_provisioning(int32_t client_id,
     }
     /* FIXME:Has been provisioned already */
 }
-#endif
+
 
 etss_err_t etss_set(int32_t client_id,
                     psa_storage_uid_t uid,
@@ -471,7 +469,7 @@ etss_err_t etss_get_puf(int32_t client_id, size_t buf_size, size_t *puf_len)
     uint8_t puf[SECURE_FLASH_MAX_PUF_SIZE];
     int32_t status;
     uint8_t actual_size;
-    if (secureflash.flash_info.flash_profile->security_feature.PUF) {
+    if (secureflash.flash_info.flash_profile->security_feature.puf) {
         status = secureflash_get_puf(&secureflash, puf, sizeof(puf), &actual_size, NULL, 0);
         if (status != SECUREFLASH_SUCCESS) {
             return ETSS_ERR_STORAGE_FAILURE;
@@ -492,7 +490,7 @@ etss_err_t etss_generate_random_number(int32_t client_id, size_t buf_size,
     int32_t status;
     uint8_t actual_size;
     *random_len = 0;
-    if (secureflash.flash_info.flash_profile->security_feature.RNG) {
+    if (secureflash.flash_info.flash_profile->security_feature.rng) {
         while (buf_size > 0) {
             status = secureflash_get_trng(&secureflash, random, buf_size, &actual_size);
             if (status != SECUREFLASH_SUCCESS) {
@@ -514,7 +512,7 @@ etss_err_t etss_generate_random_number(int32_t client_id, size_t buf_size,
 */
 etss_err_t etss_mc_increment(int32_t client_id, uint8_t mc_id)
 {
-    if (secureflash.flash_info.flash_profile->security_feature.RPMC) {
+    if (secureflash.flash_info.flash_profile->security_feature.rpmc) {
         if (secureflash_increase_mc(&secureflash, mc_id, client_id) != 0) {
             return ETSS_ERR_STORAGE_FAILURE;
         }
@@ -528,7 +526,7 @@ etss_err_t etss_mc_get(int32_t client_id, uint8_t mc_id, size_t size)
 {
     uint8_t mc[SECURE_FLASH_MAX_MC_SIZE];
     uint8_t actual_size;
-    if (secureflash.flash_info.flash_profile->security_feature.RPMC) {
+    if (secureflash.flash_info.flash_profile->security_feature.rpmc) {
         if (secureflash_get_mc(&secureflash, mc_id, mc,
                                size, &actual_size, client_id) != 0) {
             return ETSS_ERR_STORAGE_FAILURE;

@@ -7,6 +7,9 @@
 #ifndef _PLAT_SECURE_FLASH_H_
 #define _PLAT_SECURE_FLASH_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stdint.h>
 #include <string.h>
 
@@ -20,5 +23,7 @@ int32_t plat_get_secure_flash_provision_info(uint8_t *buffer, uint32_t size);
  */
 int32_t plat_store_secure_flash_provision_info(uint8_t *buffer, uint32_t size);
 
-
+#ifdef __cplusplus
+}
+#endif
 #endif /* _PLAT_SECURE_FLASH_H_ */

@@ -6,11 +6,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include "secureflash.h"
-#include "JEDEC_security_HAL/common/include/error.h"
-#include "spi_nor_flash/spi_nor.h"
 #include "psa_manifest/pid.h"
-#include "vendor_impl/vendor_provisioning_impl.h"
-#include "vendor_impl/vendor_secureflash.h"
+#include "TG424_3/JEDEC_security_HAL/include/error.h"
+#include "TG424_3/vendor_impl/vendor_provisioning_impl.h"
+#include "TG424_3/vendor_impl/vendor_secureflash.h"
+#include "spi_nor_flash/spi_nor.h"
 /**
  * \brief Query app info based on input address and app_id.
  *
@@ -88,7 +88,6 @@ static int32_t secureflash_match_id(secureflash_t *secureflash, uint8_t *id)
                              flash_info[i]->crypto_wrapper,
                              flash_info[i]->vendor_ctx);
             secureflash->flash_info.vendor_provisioning_op = flash_info[i]->vendor_provisioning_op;
-            /* fixme:should vendor_ctx be binded to secure flash */
             secureflash->flash_info.vendor_ctx = flash_info[i]->vendor_ctx;
             secureflash->flash_info.flash_profile = flash_info[i]->flash_profile;
             return SECUREFLASH_SUCCESS;
@@ -149,7 +148,7 @@ int32_t secureflash_init(secureflash_t *secureflash)
     }
     /* jedec secure init */
     status = jedec_secure_init(SECUREFLASH_AUTHEN_KEY_ID);
-    if (status != ERR_NONE) {
+    if (status != JEDEC_ERROR_NONE) {
         status = SECUREFLASH_ERROR_SECURE_INIT;
         goto init_exit_point;
     }
@@ -163,7 +162,7 @@ int32_t secureflash_uninit(secureflash_t *secureflash)
     int32_t status = SECUREFLASH_SUCCESS;
 
     status = jedec_secure_uninit(SECUREFLASH_AUTHEN_KEY_ID);
-    if (status != ERR_NONE) {
+    if (status != JEDEC_ERROR_NONE) {
         status = SECUREFLASH_ERROR_SECURE_DEINIT;
         goto uninit_exit_point;
     }
@@ -201,7 +200,7 @@ int32_t secureflash_secure_read(secureflash_t *secureflash, void *buffer,
         status = SECUREFLASH_ERROR_ILLEGAL_ACCESS;
         goto secure_read_exit_point;
     }
-    if (jedec_create_session(app_data->key_id, 0, &session_key_id) != ERR_NONE) {
+    if (jedec_create_session(app_data->key_id, 0, &session_key_id) != JEDEC_ERROR_NONE) {
         status = SECUREFLASH_ERROR_CREATE_SESSION;
         goto secure_read_exit_point;
     }
@@ -210,7 +209,7 @@ int32_t secureflash_secure_read(secureflash_t *secureflash, void *buffer,
         offset = addr % read_len;
         chunk = (offset + size < read_len) ? size : (read_len - offset);
         if (jedec_secure_read(addr, (uint8_t *)buffer_ptr, chunk,
-                              session_key_id, &actual_read_size) != ERR_NONE) {
+                              session_key_id, &actual_read_size) != JEDEC_ERROR_NONE) {
             status = SECUREFLASH_ERROR_SECURE_READ;
             goto secure_read_exit_point;
         }
@@ -218,7 +217,7 @@ int32_t secureflash_secure_read(secureflash_t *secureflash, void *buffer,
         addr += chunk;
         buffer_ptr += chunk;
     }
-    if (jedec_terminate_session(session_key_id) != ERR_NONE) {
+    if (jedec_terminate_session(session_key_id) != JEDEC_ERROR_NONE) {
         status = SECUREFLASH_ERROR_CLOSE_SESSION;
         goto secure_read_exit_point;
     }
@@ -247,7 +246,7 @@ int32_t secureflash_secure_program(secureflash_t *secureflash,
         status = SECUREFLASH_ERROR_ILLEGAL_ACCESS;
         goto secure_program_exit_point;
     }
-    if (jedec_create_session(app_data->key_id, 0, &session_key_id) != ERR_NONE) {
+    if (jedec_create_session(app_data->key_id, 0, &session_key_id) != JEDEC_ERROR_NONE) {
         status = SECUREFLASH_ERROR_CREATE_SESSION;
         goto secure_program_exit_point;
     }
@@ -256,7 +255,7 @@ int32_t secureflash_secure_program(secureflash_t *secureflash,
         offset = addr % program_len;
         chunk = (offset + size < program_len) ? size : (program_len - offset);
         if (jedec_secure_program(addr, (uint8_t *)buffer_ptr, chunk,
-                                 session_key_id, &actual_program_size) != ERR_NONE) {
+                                 session_key_id, &actual_program_size) != JEDEC_ERROR_NONE) {
             status = SECUREFLASH_ERROR_SECURE_PROGRAM;
             goto secure_program_exit_point;
         }
@@ -264,7 +263,7 @@ int32_t secureflash_secure_program(secureflash_t *secureflash,
         addr += chunk;
         buffer_ptr += chunk;
     }
-    if (jedec_terminate_session(session_key_id) != ERR_NONE) {
+    if (jedec_terminate_session(session_key_id) != JEDEC_ERROR_NONE) {
         status = SECUREFLASH_ERROR_CLOSE_SESSION;
         goto secure_program_exit_point;
     }
@@ -296,19 +295,19 @@ int32_t secureflash_secure_erase(secureflash_t *secureflash, size_t addr,
         status = SECUREFLASH_ERROR_ILLEGAL_ACCESS;
         goto secure_erase_exit_point;
     }
-    if (jedec_create_session(app_data->key_id, 0, &session_key_id) != ERR_NONE) {
+    if (jedec_create_session(app_data->key_id, 0, &session_key_id) != JEDEC_ERROR_NONE) {
         status = SECUREFLASH_ERROR_CREATE_SESSION;
         goto secure_erase_exit_point;
     }
     while (size > 0) {
-        if (jedec_secure_erase(addr, erase_size, session_key_id) != ERR_NONE) {
+        if (jedec_secure_erase(addr, erase_size, session_key_id) != JEDEC_ERROR_NONE) {
             status = SECUREFLASH_ERROR_SECURE_ERASE;
             goto secure_erase_exit_point;
         }
         size -= erase_size;
         addr += erase_size;
     }
-    if (jedec_terminate_session(session_key_id) != ERR_NONE) {
+    if (jedec_terminate_session(session_key_id) != JEDEC_ERROR_NONE) {
         status = SECUREFLASH_ERROR_CLOSE_SESSION;
         goto secure_erase_exit_point;
     }
@@ -360,11 +359,9 @@ int32_t secureflash_get_mc(secureflash_t *secureflash, uint8_t mc_addr,
     return SECUREFLASH_SUCCESS;
 }
 
-#ifdef SECUREFLASH_PROVISION
 int32_t secureflash_provision(secureflash_t *secureflash,
                               uint8_t *provision_data, size_t data_length)
 {
     /* Directly call vendor specific secure flash provision implementation */
-    return secureflash->flash_info.vendor_provisioning_op->provision_perform_and_verify(secureflash->flash_info.vendor_ctx, provision_data, data_length);
+    return secureflash->flash_info.vendor_provisioning_op->perform_and_verify(secureflash->flash_info.vendor_ctx, provision_data, data_length);
 }
-#endif

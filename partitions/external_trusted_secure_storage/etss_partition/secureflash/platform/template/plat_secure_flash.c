@@ -4,17 +4,27 @@
  *
  */
 #include "plat_secure_flash.h"
+#include "Driver_Flash.h"
+#include "low_level_ospi_flash.h"
+#include "flash_layout.h"
 
-/* Hard coded provision information can only be applicable for developer mode */
-const uint8_t stored_provision_data[] = {};
+
+#define SECUREFLASH_PROV_INFO_OFFSET (0x10000)
+static uint8_t initialized = 0;
+extern ARM_DRIVER_FLASH OSPI_FLASH_DEV_NAME;
 
 /* Platform specific implementation of getting pre-provisioned
  * secure Flash provisioning information
  */
 int32_t plat_get_secure_flash_provision_info(uint8_t *buffer, uint32_t size)
 {
-/* TODO */
-    memcpy(buffer, stored_provision_data, sizeof(stored_provision_data));
+    if (!initialized) {
+        if (OSPI_FLASH_DEV_NAME.Initialize(NULL) != ARM_DRIVER_OK) {
+            return -1;
+        }
+        initialized = 1;
+    }
+    OSPI_FLASH_DEV_NAME.ReadData(SECUREFLASH_PROV_INFO_OFFSET, buffer, size);
     return 0;
 }
 
@@ -23,6 +33,17 @@ int32_t plat_get_secure_flash_provision_info(uint8_t *buffer, uint32_t size)
  */
 int32_t plat_store_secure_flash_provision_info(uint8_t *buffer, uint32_t size)
 {
-/* TODO */
+    if (!initialized) {
+        if (OSPI_FLASH_DEV_NAME.Initialize(NULL) != ARM_DRIVER_OK) {
+            return -1;
+        }
+        initialized = 1;
+    }
+    if (OSPI_FLASH_DEV_NAME.EraseSector(SECUREFLASH_PROV_INFO_OFFSET) != ARM_DRIVER_OK) {
+        return -1;
+    }
+    if (OSPI_FLASH_DEV_NAME.ProgramData(SECUREFLASH_PROV_INFO_OFFSET, buffer, size) != ARM_DRIVER_OK) {
+        return -1;
+    }
     return 0;
 }

@@ -10,7 +10,6 @@
 #include "etss_flash_fs.h"
 #include "etss_flash_fs_dblock.h"
 #include "etss_utils.h"
-#include "tfm_sp_log.h"//for debug
 
 /* Filesystem-internal flags, which cannot be passed by the caller */
 #define ETSS_FLASH_FS_INTERNAL_FLAGS_MASK  (UINT32_MAX - ((1U << 24) - 1))
@@ -323,7 +322,6 @@ psa_status_t etss_flash_fs_file_write(struct etss_flash_fs_ctx_t *fs_ctx,
                                                 max_size, flags, &new_idx,
                                                 &file_meta, &block_meta);
         if (err != PSA_SUCCESS) {
-        	LOG_INFFMT("etss_flash_fs_mblock_reserve_file status:%d\r\n",err);
             return err;
         }
     } else {
@@ -331,7 +329,6 @@ psa_status_t etss_flash_fs_file_write(struct etss_flash_fs_ctx_t *fs_ctx,
         err = etss_flash_fs_mblock_read_block_metadata(fs_ctx, file_meta.lblock,
                                                        &block_meta);
         if (err != PSA_SUCCESS) {
-        	LOG_INFFMT("etss_flash_fs_mblock_read_block_metadata status:%d\r\n",err);
             return PSA_ERROR_GENERIC_ERROR;
         }
     }

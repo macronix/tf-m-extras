@@ -32,7 +32,7 @@ extern "C" {
  *                                       unspecified internal failure
  */
 etss_err_t etss_init(void);
-#ifdef SECUREFLASH_PROVISION
+
 /**
  * \brief Secure Flash provisioning
  *
@@ -46,7 +46,7 @@ etss_err_t etss_init(void);
 etss_err_t etss_secure_flash_provisioning(int32_t client_id,
                                           const uint8_t *prov_data,
                                           size_t data_length);
-#endif
+
 /**
  * \brief Create a new, or modify an existing, uid/value pair
  *

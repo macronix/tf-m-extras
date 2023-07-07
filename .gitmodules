@@ -1,0 +1,4 @@
+[submodule "partitions/external_trusted_secure_storage/etss_partition/secureflash/TG424_3"]
+	path = partitions/external_trusted_secure_storage/etss_partition/secureflash/TG424_3
+	url = https://github.com/macronix/TG424_3
+	branch = macronix_secureflash_TG424_3

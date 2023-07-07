@@ -46,7 +46,6 @@ target_sources(tfm_psa_rot_partition_etss
         ${ETSS_PARTITION_DIR}/secureflash_fs/etss_flash_fs.c
         ${ETSS_PARTITION_DIR}/secureflash_fs/etss_flash_fs_dblock.c
         ${ETSS_PARTITION_DIR}/secureflash_fs/etss_flash_fs_mblock.c
-        $<$<AND:$<BOOL:${SECUREFLASH_PROVISION}>,$<BOOL:${ETSS_PROV_DEVELOPER_MODE}>>:${ETSS_PARTITION_DIR}/secureflash_provisioning_blob.c>
 )
 
 # The generated sources

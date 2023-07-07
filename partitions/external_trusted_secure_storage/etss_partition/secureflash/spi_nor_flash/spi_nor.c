@@ -39,12 +39,12 @@
 
 #define  SCUR_ORDY               0x10   /* Security packet output ready bit */
 
-#define SUCCESS                  (0)
-#define FAILURE                  (-1)
+#define SUCCESS                  0
+#define FAILURE                  -1
 #define BUFFER_SIZE              0x132
-#define MAX_POLLING_TIMES        (1000)
+#define MAX_POLLING_TIMES        1000
 
-static spi_nor_t spi_nor = {0};
+static spi_nor_t spi_nor = {};
 
 
 void cmd_packing(nor_cmd_packet_t *cmd_packet)

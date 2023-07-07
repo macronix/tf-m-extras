@@ -72,7 +72,7 @@ Security features introduced in JESD261 include session-based communication, sec
 and erase operations, as well as partitioning of the Flash device into protected regions,
 that are available through an application interface. JESD261 defines rules for implementing
 this application interface to simplify the use and evaluation of these common security features
-accross Flash vendors.
+accross secure Flash vendors.
 
 Accordingly, an important update on this release version of ETSS partition is the implementation
 of JEDEC security HAL API.
@@ -119,8 +119,8 @@ implemented to facilitate secure Flash provisioning in the manufacture process.
 
 Specific secure Flash provisioning information can be assigned while calling
 ``etss_secure_flash_provisioning`` service. As the provisioning of secure Flash is not
-addressed in JESD261 standard, besides, the specific provisioning implementation
-and data may vary with security memory vendors and platforms. Here the specific secure
+addressed in JESD261 standard, and the specific provisioning implementation process
+may vary with security memory vendors and platforms. In this design the specific secure
 Flash provisioning is implemented by each vendor in vendor specific implementation layer as shown below.
 
 .. figure:: media/Secure_Flash_Provisioning.png
@@ -181,8 +181,7 @@ Flash framework module is shown below.
 
    Block diagram of secure Flash framework with JEDEC security HAL.
 
-The secure Flash framework is subdivided into four parts: secure Flash API layer,
-JEDEC security HAL layer, vendor specific implementations layer and spi nor operations layer.
+The secure Flash framework is subdivided into three parts:
 
 - Secure Flash API layer
 
@@ -192,20 +191,21 @@ The specific representation of application identification varies accross softwar
 platforms and OSes. Here integrated with TF-M, this layer manages access permissions
 based on client id.
 
-- JEDEC security HAL layer
+- JEDEC security HAL module
 
-This layer implements the interfaces defined in JEDEC JESD261 standard.
-The specific implementation process of each API calls pre-binding vendor
-specific operations implemented in vendor specific implementations layer.
-This layer calls TF-M crypto services via vendor specific crypto wrapper functions.
+JEDEC security HAL module could be compiled for use within different OSes and software platforms.
+This module consits of JEDEC security HAL API layer and vendor specific implementation layer.
 
-- Vendor specific implementations layer
+JEDEC security HAL API layer implements the interfaces defined in JEDEC JESD261 standard.
+And calls the pre-binding specific sub-steps implemented in vendor specific implementation layer.
+Here integrated in TF-M platform, the JEDEC security HAL API layer calls TF-M crypto services via
+vendor specific crypto wrapper functions.
 
-The specific implementation of funcations required by JEDEC security HAL layer.
-Besides, this layer also includes the specific implementation of secure Flash
-provisioning which should be performed before deployment.
+Vendor specific implementations layer provides specific sub-steps implementaion required by
+JEDEC security HAL API layer. In addition, this layer also includes the specific implementation
+of secure Flash provisioning which should be performed before deployment.
 
-- Spi nor operations layer
+- Spi nor operation layer
 
 The implementation of SPI NOR flash normal commands and operations, such as read id, write enable, etc.
 
@@ -228,39 +228,40 @@ tf-m-extras repo:
 - ``etss_req_mngr.c`` - Uniform IPC request handlers
 - ``external_trusted_secure_storage.h`` - ETSS API with client_id parameter
 - ``external_trusted_secure_storage.c`` - ETSS implementation, using secureflash_fs as back-end
-- ``secureflash_provisioning_blob.c`` - A template secure Flash provisioning blob
 - ``secureflash_fs/`` - Secure Flash filesystem
 - ``external_secure_flash/`` - Secure Flash filesystem operations
 - ``secureflash/`` - Backend secure Flash framework for ETSS service
     - ``secureflash.c`` - Secure Flash API implementation
     - ``secureflash.h`` - Header file for secure Flash API layer
-    - ``JEDEC_security_HAL/`` - JEDEC security HAL implementation
-        - ``jedec_security_hal.c`` - JEDEC security HAL implementation
-        - ``jedec_security_hal.h`` - Header file for JEDEC security HAL layer
-        - ``queue.c`` - Queue operations implementation
-        - ``queue.h`` - Queue operations definition
-        - ``crypto_defs.h`` - Crypto definitions
-        - ``crypto_wrapper.h`` - Crypto wrapper functions definition
-        - ``vendor_security_impl.h`` - Header file for vendor specific security operations
-    - ``vendor_impl/`` - Flash vendors' specific implementation
-        - ``macronix/`` - The specific implementations for Macronix secure Flash products
-            - ``armorflash_mx75/`` - The specific implementations for Macronix MX75 ArmorFlash
-            - ``armorflash_mx78/`` - The specific implementations for Macronix MX78 ArmorFlash
-        - ``vendor_template/`` - Reserved vendor specific implementation for reference
-        - ``vendor_provisioning_impl.h`` - Header file for vendor specific secure flash provisioning operations
-        - ``vendor_secureflash_defs.h`` - Vendor secure flash definitions
-        - ``vendor_secureflash.h`` - Vendor secure flash informations
-    - ``spi_nor_flash/`` - Normal spi nor flash operations
+    - ``TG424_3/`` - Containing JEDEC security HAL implementation
+        - ``JEDEC_security_HAL/`` - JEDEC security HAL API layer
+            - ``jedec_security_hal.c`` - JEDEC security HAL API implementation
+            - ``jedec_security_hal.h`` - Header file for JEDEC security HAL API layer
+            - ``queue.c`` - Queue operations implementation
+            - ``queue.h`` - Queue operations definition
+            - ``crypto_wrapper.h`` - Header file for crypto wrapper functions
+            - ``vendor_security_impl.h`` - Header file for vendor specific implementation of JEDEC security HAL sub-steps 
+        - ``vendor_impl/`` - Flash vendors' specific implementation
+            - ``macronix/`` - The specific implementations for Macronix secure Flash products
+                - ``armorflash_mx75/`` - The specific implementations for Macronix MX75 ArmorFlash
+                - ``armorflash_mx78/`` - The specific implementations for Macronix MX78 ArmorFlash
+            - ``vendor_template/`` - Reserved vendor specific implementation for reference
+            - ``vendor_provisioning_impl.h`` - Header file for vendor specific secure flash provisioning operations
+            - ``vendor_secureflash_defs.h`` - Vendor secure flash definitions
+            - ``vendor_secureflash.h`` - Header file containing vendors' secure flash informations
+    - ``spi_nor_flash/`` - Spi nor flash normal operations
         - ``spi_nor.h`` - Header file for spi nor flash operations
         - ``spi_nor.c`` - Spi nor flash operations
-        - ``spi_nor_hc.h`` - Headre file for spi nor flash host controller driver
-        - ``spi_nor_hc.c`` - Spi nor flash host controller driver implementation with STM32L5 platform
-    - ``template/`` - Reference implementation of platform's ports
-        - ``Driver_SPI.h`` - CMSIS header file for SPI
-        - ``low_level_spi.c`` - Reference porting of ``Driver_SPI.h`` with STM32L5 platform
-        - ``plat_secure_flash.c`` - Platform specific implementation of storing and geeting secure Flash provisioning information
-        - ``plat_secure_flash.h`` - Header file for platform specific implementation of storing and geeting secure Flash provisioning information
-
+    - ``platform/`` - Platform porting files 
+        - ``include/`` - Header files provideing interfaces which should be ported on platforms
+            - ``spi_nor_hc.h`` - Provide interfaces for driving spi nor flash host controller
+            - ``plat_secure_flash.h`` - Provide interfaces for storing and getting secure flash provision information
+        - ``template/`` - Examples implementations of the interfaces defined in above header files for reference, which should be altered by actual platform specific implementations
+            - ``spi_nor_hc.c`` - Example implementation of spi nor flash host controller driver with STM32L562E_DK evaluation board
+            - ``plat_secure_flash.c`` - Example implementation of storing and getting secure Flash provisioning information with STM32L562E_DK evaluation board
+			- ``Driver_SPI.h`` - Header file for SPI driver
+            - ``low_level_spi.c`` - SPI driver implementation ported on STM32L562E_DK evaluation board
+			
 ``partitions/external_trusted_secure_storage/interface/``
 
 - ``include/etss/etss_api.h`` - ETSS API
@@ -281,8 +282,8 @@ tf-binaries repo:
 
 ``macronix/commonBinaryMX78/``
 
-- ``mx78_armor_lib.a`` - The binary library for Macronix MX78 ArmorFlash
-- ``mx78_armor_provisioning_lib.a`` - The binary library for Macronix MX78 ArmorFlash provisioning
+- ``libmx78_armor_lib.a`` - The binary library for Macronix MX78 ArmorFlash
+- ``libmx78_armor_provision_lib.a`` - The binary library for Macronix MX78 ArmorFlash provisioning
 
 
 ***********************
@@ -294,18 +295,17 @@ Currently, only GNUARM is supported to build ETSS partition as an out-of-tree Se
 The ``partitions/external_trusted_secure_storage/suites`` provides ETSS service test suites, this folder can be integrated
 with ``tf-m-tests`` for testing.
 
-Prior to testing ETSS services, secure Flash provisiong should be performed. For
-a quick start, please enable ``ETSS_PROV_DEVELOPER_MODE`` mode and set ``SECUREFLASH_PROVISION``
-to 1. Then the template secure Flash provisioning blob defined in ``secureflash_provisioning_blob.c``
-would be used for secure Flash provisioning, take Macronix ArmorFlash as example, the application ids
-defined in this blob are in accrodance with ``SECURE_FLASH_CLIENTx_ID`` defined in
+Prior to testing ETSS services, secure Flash provisiong should be performed. Take Macronix ArmorFlash as example,
+for a quick start, please enable ``ETSS_PROV_DEVELOPER_MODE`` mode and set ``SECUREFLASH_PROVISION``
+to 1. Then the template secure Flash provisioning blob ``PROVISIONING_BLOB`` defined in ``mx78_armor.c``
+would be used for secure Flash provisioning, the application ids defined in this blob are in
+accrodance with ``SECURE_FLASH_CLIENTx_ID`` defined in
 ``external_trusted_secure_storage/etss_partition/secureflash/vendor_impl/macronix/armorflash_mx78/secureflash_layout.h``.
 
-For other vendors' secure Flash products, please modify the secure Flash provisioning blob defined in ``secureflash_provisioning_blob.c``
-to be consistent with vendor specific ``secureflash_layout.h``, or refer to secure Flash vendors'
+For other vendors' secure Flash products, please refer to secure Flash vendors'
 instruction document about specific secure Flash provisioning implementation.
 
-build with the following commands for secure Flash provisioning.
+build with the following commands for secure Flash provisioning, here also take Macronix ArmorFlash as example.
 
 .. code-block:: bash
 
@@ -319,6 +319,7 @@ build with the following commands for secure Flash provisioning.
     -DSECUREFLASH_PROVISION=1 -DETSS_PROV_DEVELOPER_MODE=1 \
     -DTFM_PARTITION_EXTERNAL_TRUSTED_SECURE_STORAGE=ON \
     -DCONFIG_TFM_SPM_BACKEND="IPC"
+    -DCRYPTO_PSA=ON
     cmake --build cmake_build -- install
 
 After finishing secure Flash provisioning, build with the following commands for
@@ -335,7 +336,7 @@ etss non-secure test suite testing.
     -DSECUREFLASH_TYPE=macronix/armorflash_mx78  -DTFM_PARTITION_EXTERNAL_TRUSTED_SECURE_STORAGE=ON \
     -DCONFIG_TFM_SPM_BACKEND="IPC" \
     -DEXTRA_NS_TEST_SUITE_PATH=/home/a/workspace1/TF-M/trustedfirmware-m/tf-m-extras/partitions/external_trusted_secure_storage/suites/non_secure \
-    -DTEST_NS_ETSS=ON -DEXTRA_NS_TEST_SUITE=ON -DTFM_NS_MANAGE_NSID=ON
+    -DTEST_NS_ETSS=ON -DEXTRA_NS_TEST_SUITE=ON -DTFM_NS_MANAGE_NSID=ON -DCRYPTO_PSA=O
 
 build with the following commands for etss secure test suite testing.
 
@@ -350,7 +351,7 @@ build with the following commands for etss secure test suite testing.
     -DSECUREFLASH_TYPE=macronix/armorflash_mx78  -DTFM_PARTITION_EXTERNAL_TRUSTED_SECURE_STORAGE=ON \
     -DCONFIG_TFM_SPM_BACKEND="IPC" \
     -DEXTRA_S_TEST_SUITE_PATH=<tf-m-extras-abs-path>/partitions/external_trusted_secure_storage/suites/secure \
-    -DTEST_S_ETSS=ON -DEXTRA_S_TEST_SUITE=ON
+    -DTEST_S_ETSS=ON -DEXTRA_S_TEST_SUITE=ON -DCRYPTO_PSA=O
     cmake --build cmake_build_etss_s_test -- install
 
 .. note:: <TFM_PLATFORM>: Please refer to TF-M build instructions [4]_ for ``TFM_PLATFORM`` options.
